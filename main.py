@@ -23,7 +23,8 @@ def startBot(message):
     # markup.row(button_creator, button2)
     markup.row(types.InlineKeyboardButton(text='Да', callback_data='registration'),
                types.InlineKeyboardButton(text='Нет', callback_data='no'))
-    markup.add(types.InlineKeyboardButton("Показать список пользователей", callback_data='show_users'))
+    markup.row(types.InlineKeyboardButton("Показать список пользователей", callback_data='show_users'),
+               types.InlineKeyboardButton(text='Очистить чат', callback_data='clean'))
     bot.send_message(message.chat.id, first_mess, parse_mode='html', reply_markup=markup)
 
 
@@ -60,7 +61,7 @@ def photo_callback(callback):
         connection = sqlite3.connect('demobot.sql')
         cur = connection.cursor()
 
-        cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, '
+        cur.execute('CREATE TABLE IF NOT EXISTS users (id integer primary key autoincrement, '
                     'name varchar(50), age int, password varchar(50))')
         connection.commit()
 
@@ -78,10 +79,12 @@ def photo_callback(callback):
         fetch = cur.fetchall()
 
         users = ''
+        i = 1
         for el in fetch:
-            users += (f'Имя: {el[1]}\n'
+            users += (f'{i}) Имя: {el[1]}\n'
                       f'Возраст: {el[2]}\n'
-                      f'Пароль: {el[3]}')
+                      f'Пароль: {el[3]}\n\n')
+            i += 1
 
         cur.close()
         connection.close()
@@ -130,7 +133,7 @@ def clean_chat(chat_id, message_id):
         try:
             bot.delete_message(chat_id, message_id)
             message_id -= 1
-            time.sleep(0.1)  # Добавим задержку, чтобы избежать ограничения по запросам
+            time.sleep(0.001)  # Добавим задержку, чтобы избежать ограничения по запросам
         except Exception as e:
             message_id -= 1
 
