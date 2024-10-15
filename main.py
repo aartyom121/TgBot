@@ -1,28 +1,31 @@
 import asyncio
+import json
 import webbrowser
 import time
 import sqlite3
+import requests
 
 import telebot
 from telebot import types
 
 bot = telebot.TeleBot('7876492559:AAFBAv_CnHqcrdX-vGOD7aWZkJGqkpNlgus')
+API = '5650a3e59285de09b3c4ccf8919234d0'
 
 
 @bot.message_handler(commands=['start'])
 def startBot(message):
     if message.from_user.last_name and message.from_user.first_name:
         first_mess = (f"Привет, <b>{message.from_user.first_name} {message.from_user.last_name}</b>.\n"
-                      f"Хочешь ли ты зарегистрироваться?")
+                      f"Это мой тестовый телеграм бот")
     else:
         first_mess = (f"Привет, <b>{message.from_user.first_name} </b>. \n"
-                      f"Хочешь ли ты зарегистрироваться?")
+                      f"Это мой тестовый телеграм бот")
     markup = types.InlineKeyboardMarkup()
     # button_creator = types.InlineKeyboardButton(text='Страница создателя', url='https://t.me/asmirzoian')
     # button2 = types.InlineKeyboardButton(text='Страница соседа', url='https://t.me/Al1tap')
     # markup.row(button_creator, button2)
-    markup.row(types.InlineKeyboardButton(text='Да', callback_data='registration'),
-               types.InlineKeyboardButton(text='Нет', callback_data='no'))
+    markup.row(types.InlineKeyboardButton(text='Регистрация', callback_data='registration'),
+               types.InlineKeyboardButton("Узнать погоду", callback_data='weather'))
     markup.row(types.InlineKeyboardButton("Показать список пользователей", callback_data='show_users'),
                types.InlineKeyboardButton(text='Очистить чат', callback_data='clean'))
     bot.send_message(message.chat.id, first_mess, parse_mode='html', reply_markup=markup)
@@ -58,6 +61,7 @@ def photo_callback(callback):
         clean_chat(chat_id, callback.message.message_id)
 
     elif callback.data == 'registration':
+        bot.delete_message(chat_id, callback.message.message_id)
         connection = sqlite3.connect('demobot.sql')
         cur = connection.cursor()
 
@@ -68,10 +72,15 @@ def photo_callback(callback):
         cur.close()
         connection.close()
 
-        bot.send_message(callback.message.chat.id, 'Введите свое имя:')
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        markup.add(types.KeyboardButton("Отмена"))
+
+        bot.send_message(chat_id, 'Введите свое имя:', reply_markup=markup)
         bot.register_next_step_handler(callback.message, input_name)
 
     elif callback.data == 'show_users':
+        if callback.message.text.startswith("Привет"):
+            bot.delete_message(chat_id, callback.message.message_id)
         connection = sqlite3.connect('demobot.sql')
         cur = connection.cursor()
 
@@ -89,26 +98,68 @@ def photo_callback(callback):
         cur.close()
         connection.close()
 
-        bot.reply_to(callback.message, users)
+        bot.send_message(chat_id, f'Список пользователей:\n{users}')
+
+    elif callback.data == 'no':
+        markup = types.InlineKeyboardMarkup()
+        markup.row(types.InlineKeyboardButton("Узнать погоду", callback_data='weather'))
+        bot.send_message(chat_id, "Могу предложить вам узнать погоду", reply_markup=markup)
+
+    elif callback.data == 'weather':
+        bot.send_message(chat_id, "Введите название города")
+        bot.register_next_step_handler(callback.message, get_weather)
+    elif callback.data == 'start':
+        startBot(callback.message)
+
+
+def get_weather(message):
+    city = message.text.lower()
+    try:
+        data_json = requests.get(f"https://api.openweathermap.org/data/2.5/weather?q={city}"
+                                 f"&appid={API}&units=metric&lang=ru")
+        data = json.loads(data_json.text)
+
+        bot.reply_to(message, f"Температура: {int(data['main']['temp'])}°С\n"
+                              f"Ощущается как: {int(data['main']['feels_like'])}°С\n"
+                              f"Влажность: {data['main']['humidity']}%\n"
+                              f"Описание: {data['weather'][0]['description']}", )
+        startBot(message)
+
+    except Exception:
+        bot.reply_to(message, f'Ошибка.\nПожалуйста, повторите позже.')
+        startBot(message)
 
 
 def input_name(message):
+    if message.text.lower() == "отмена":
+        startBot(message)
+        return
     data = {
         'name': f"{message.text}",
         'age': '',
         'password': ''
     }
-    bot.send_message(message.chat.id, 'Введите возраст:')
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add(types.KeyboardButton("Отмена"))
+    bot.send_message(message.chat.id, 'Введите возраст:', reply_markup=markup)
     bot.register_next_step_handler(message, input_age, data)
 
 
 def input_age(message, data):
+    if message.text.lower() == "отмена":
+        startBot(message)
+        return
     data['age'] = message.text
-    bot.send_message(message.chat.id, 'Введите пароль:')
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add(types.KeyboardButton("Отмена"))
+    bot.send_message(message.chat.id, 'Введите пароль:', reply_markup=markup)
     bot.register_next_step_handler(message, input_password, data)
 
 
 def input_password(message, data):
+    if message.text.lower() == "отмена":
+        startBot(message)
+        return
     data['password'] = message.text
     name = data['name']
     age = data['age']
